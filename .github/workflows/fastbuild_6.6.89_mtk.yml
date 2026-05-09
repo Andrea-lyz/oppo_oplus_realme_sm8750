@@ -426,11 +426,6 @@ jobs:
         run: |
           cd kernel_workspace
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_BPF_LSM=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_BPF_TRAMPOLINE=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DYNAMIC_FTRACE=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEBUG_INFO_BTF=y" >> ./common/arch/arm64/configs/gki_defconfig
           if [[ ${{ github.event.inputs.kpm_enable }} == 'builtin' && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
             echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
           fi
@@ -452,9 +447,6 @@ jobs:
           #禁用 defconfig 检查
           sed -i 's/check_defconfig//' ./common/build.config.gki
           #跳过将uapi标准头安装到 usr/include 目录的不必要操作，节省编译时间
-          cd ./common
-          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /bpf/! s/selinux/bpf,selinux/ } }' security/Kconfig
-          cd ..
           echo "CONFIG_HEADERS_INSTALL=n" >> ./common/arch/arm64/configs/gki_defconfig
           
       - name: 启用网络功能增强优化配置

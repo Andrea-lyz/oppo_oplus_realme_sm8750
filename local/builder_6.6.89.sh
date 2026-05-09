@@ -258,11 +258,6 @@ DEFCONFIG_FILE=./common/arch/arm64/configs/gki_defconfig
 
 # 写入通用 SUSFS/KSU 配置
 echo "CONFIG_KSU=y" >> "$DEFCONFIG_FILE"
-echo "CONFIG_BPF_LSM=y" >> "$DEFCONFIG_FILE"
-echo "CONFIG_BPF_TRAMPOLINE=y" >> "$DEFCONFIG_FILE"
-echo "CONFIG_DYNAMIC_FTRACE=y" >> "$DEFCONFIG_FILE"
-echo "CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS=y" >> "$DEFCONFIG_FILE"
-echo "CONFIG_DEBUG_INFO_BTF=y" >> "$DEFCONFIG_FILE" 
 if [[ "$APPLY_SUSFS" == [yY] ]]; then
   echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG_FILE"
   echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> "$DEFCONFIG_FILE"
@@ -290,9 +285,6 @@ echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$DEFCONFIG_FILE"
 echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$DEFCONFIG_FILE"
 #跳过将uapi标准头安装到 usr/include 目录的不必要操作，节省编译时间
 echo "CONFIG_HEADERS_INSTALL=n" >> "$DEFCONFIG_FILE"
-cd common
-sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /bpf/! s/selinux/bpf,selinux/ } }' security/Kconfig
-cd ..
 
 # 仅在启用了 KPM 时添加 KPM 支持
 if [[ "$USE_PATCH_LINUX" == [bB] && $KSU_BRANCH == [yYrR] ]]; then
