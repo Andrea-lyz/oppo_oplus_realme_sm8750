@@ -1,8 +1,8 @@
 diff --git a/security/selinux/ss/services.c b/security/selinux/ss/services.c
-index e5d1431..775be30 100644
+index e5d1431..50978c5 100644
 --- a/security/selinux/ss/services.c
 +++ b/security/selinux/ss/services.c
-@@ -945,6 +945,226 @@ static void avd_init(struct selinux_policy *policy, struct av_decision *avd)
+@@ -945,6 +945,283 @@ static void avd_init(struct selinux_policy *policy, struct av_decision *avd)
  	avd->flags = 0;
  }
  
@@ -22,6 +22,14 @@ index e5d1431..775be30 100644
 +	{ "untrusted_app", "lsposed_file", "file", "read" },
 +};
 +
++static const char * const selinux_hidden_context_types[] = {
++	"ksu",
++	"ksu_file",
++	"magisk",
++	"magisk_file",
++	"lsposed_file",
++};
++
 +static bool selinux_hidden_av_query_caller(struct policydb *policydb,
 +					   struct sidtab *sidtab)
 +{
@@ -35,6 +43,55 @@ index e5d1431..775be30 100644
 +	ctype = sym_name(policydb, SYM_TYPES, ccontext->type - 1);
 +
 +	return ctype && !strcmp(ctype, "app_zygote");
++}
++
++static bool selinux_hidden_context_has_type(const char *scontext,
++					    u32 scontext_len,
++					    const char *type)
++{
++	const char *end;
++	const char *p;
++	const char *type_start;
++	size_t field_len;
++	unsigned int fields = 0;
++
++	end = scontext + strnlen(scontext, scontext_len);
++	p = scontext;
++	while (p < end && fields < 2) {
++		if (*p == ':')
++			fields++;
++		p++;
++	}
++	if (fields < 2 || p >= end)
++		return false;
++
++	type_start = p;
++	while (p < end && *p != ':')
++		p++;
++
++	field_len = p - type_start;
++	return field_len == strlen(type) &&
++	       !strncmp(type_start, type, field_len);
++}
++
++static bool selinux_hide_context_validity_query(struct policydb *policydb,
++						struct sidtab *sidtab,
++						const char *scontext,
++						u32 scontext_len)
++{
++	unsigned int i;
++
++	if (!selinux_hidden_av_query_caller(policydb, sidtab))
++		return false;
++
++	for (i = 0; i < ARRAY_SIZE(selinux_hidden_context_types); i++) {
++		if (selinux_hidden_context_has_type(
++			    scontext, scontext_len,
++			    selinux_hidden_context_types[i]))
++			return true;
++	}
++
++	return false;
 +}
 +
 +static void selinux_hidden_avd_deny(struct av_decision *avd)
@@ -229,7 +286,7 @@ index e5d1431..775be30 100644
  void services_compute_xperms_decision(struct extended_perms_decision *xpermd,
  					struct avtab_node *node)
  {
-@@ -1201,6 +1421,8 @@ void security_compute_av_user(u32 ssid,
+@@ -1201,6 +1478,8 @@ void security_compute_av_user(u32 ssid,
  
  	context_struct_compute_av(policydb, scontext, tcontext, tclass, avd,
  				  NULL);
@@ -238,3 +295,16 @@ index e5d1431..775be30 100644
   out:
  	rcu_read_unlock();
  	return;
+@@ -1544,6 +1823,12 @@ retry:
+ 	policy = rcu_dereference(selinux_state.policy);
+ 	policydb = &policy->policydb;
+ 	sidtab = policy->sidtab;
++	if (!force &&
++	    selinux_hide_context_validity_query(policydb, sidtab, scontext2,
++					       scontext_len)) {
++		rc = -EINVAL;
++		goto out_unlock;
++	}
+ 	rc = string_to_context_struct(policydb, sidtab, scontext2,
+ 				      &context, def_sid);
+ 	if (rc == -EINVAL && force) {

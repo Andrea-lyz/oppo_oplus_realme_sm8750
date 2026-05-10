@@ -28,7 +28,7 @@ on:
         type: boolean
         default: 'true'
       selinux_hide_enable:
-        description: '是否应用 SELinux 策略查询隐藏补丁（方案A，默认开启）'
+        description: '是否应用 SELinux 策略/上下文查询隐藏补丁（方案A，默认开启）'
         required: true
         type: boolean
         default: 'true'
@@ -377,11 +377,11 @@ jobs:
             patch -p1 < 10_enable_susfs_for_ksu.patch || true
           fi
           
-      - name: 应用 SELinux 策略查询隐藏补丁
+      - name: 应用 SELinux 策略/上下文查询隐藏补丁
         if: inputs.selinux_hide_enable
         run: |
           cd kernel_workspace
-          echo "正在应用 SELinux 策略查询隐藏补丁..."
+          echo "正在应用 SELinux 策略/上下文查询隐藏补丁..."
           wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/70_selinux_hide_policy_query.patch -O ./common/70_selinux_hide_policy_query.patch
           cd ./common
           patch -p1 -N -F 3 < 70_selinux_hide_policy_query.patch
@@ -885,7 +885,7 @@ jobs:
           - KSU分支：${{ env.KSU_TYPENAME }}
           - susfs支持：${{ github.event.inputs.susfs_enable }}
           - KPM支持 ：${{ github.event.inputs.kpm_enable }}
-          - SELinux 策略查询隐藏补丁：${{ github.event.inputs.selinux_hide_enable }}
+          - SELinux 策略/上下文查询隐藏补丁：${{ github.event.inputs.selinux_hide_enable }}
           - LZ4支持：${{ github.event.inputs.lz4_enable }}
           - LZ4KD支持：${{ github.event.inputs.lz4kd_enable }}
           - 网络功能增强：${{ github.event.inputs.better_net }}
