@@ -13,6 +13,8 @@ read -p "请输入自定义内核后缀（默认：android15-8-g29d86c5fc9dd-abo
 CUSTOM_SUFFIX=${CUSTOM_SUFFIX:-android15-8-g29d86c5fc9dd-abogki428889875-4k}
 read -p "是否启用susfs？(y/n，默认：y): " APPLY_SUSFS
 APPLY_SUSFS=${APPLY_SUSFS:-y}
+read -p "是否应用 SELinux 策略查询隐藏补丁（方案A）？(y/n，默认：y): " APPLY_SELINUX_HIDE
+APPLY_SELINUX_HIDE=${APPLY_SELINUX_HIDE:-y}
 read -p "是否启用 KPM？(b-(re)sukisu内置kpm, k-kernelpatch next独立kpm实现, n-关闭kpm，默认：n): " USE_PATCH_LINUX
 USE_PATCH_LINUX=${USE_PATCH_LINUX:-n}
 read -p "KSU分支版本(r=ReSukiSU, y=SukiSU Ultra, n=KernelSU Next, k=KSU, l=lkm模式(无内置KSU), 默认：r): " KSU_BRANCH
@@ -60,6 +62,7 @@ echo "适用机型: $MANIFEST"
 echo "自定义内核后缀: -$CUSTOM_SUFFIX"
 echo "KSU分支版本: $KSU_TYPE"
 echo "启用susfs: $APPLY_SUSFS"
+echo "应用 SELinux 策略查询隐藏补丁: $APPLY_SELINUX_HIDE"
 echo "启用 KPM: $KPM_TYPE"
 echo "应用 lz4&zstd 补丁: $APPLY_LZ4"
 echo "应用 lz4kd 补丁: $APPLY_LZ4KD"
@@ -215,6 +218,23 @@ if [[ "$KSU_BRANCH" == [kK] && "$APPLY_SUSFS" == [yY] ]]; then
   cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
   cd ./KernelSU
   patch -p1 < 10_enable_susfs_for_ksu.patch || true
+fi
+cd "$WORKDIR/kernel_workspace"
+
+# ===== 应用 SELinux 策略查询隐藏补丁 =====
+if [[ "$APPLY_SELINUX_HIDE" == [yY] ]]; then
+  echo ">>> 应用 SELinux 策略查询隐藏补丁..."
+  SELINUX_HIDE_PATCH="$SCRIPT_DIR/../other_patch/70_selinux_hide_policy_query.patch"
+  if [[ ! -f "$SELINUX_HIDE_PATCH" ]]; then
+    echo ">>> 未找到补丁文件: $SELINUX_HIDE_PATCH"
+    exit 1
+  fi
+  cp "$SELINUX_HIDE_PATCH" ./common/
+  cd ./common
+  patch -p1 -F 3 < 70_selinux_hide_policy_query.patch
+  cd "$WORKDIR/kernel_workspace"
+else
+  echo ">>> 跳过 SELinux 策略查询隐藏补丁..."
 fi
 cd "$WORKDIR/kernel_workspace"
 

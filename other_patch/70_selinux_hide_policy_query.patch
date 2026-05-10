@@ -1,0 +1,240 @@
+diff --git a/security/selinux/ss/services.c b/security/selinux/ss/services.c
+index e5d1431..775be30 100644
+--- a/security/selinux/ss/services.c
++++ b/security/selinux/ss/services.c
+@@ -945,6 +945,226 @@ static void avd_init(struct selinux_policy *policy, struct av_decision *avd)
+ 	avd->flags = 0;
+ }
+ 
++extern struct selinux_policy *backup_sepolicy __attribute__((weak));
++
++struct selinux_hidden_av_rule {
++	const char *stype;
++	const char *ttype;
++	const char *tclass;
++	const char *perm;
++};
++
++static const struct selinux_hidden_av_rule selinux_hidden_av_rules[] = {
++	{ "system_server", "system_server", "process", "execmem" },
++	{ "untrusted_app", "magisk", "binder", "call" },
++	{ "untrusted_app", "ksu", "binder", "call" },
++	{ "untrusted_app", "lsposed_file", "file", "read" },
++};
++
++static bool selinux_hidden_av_query_caller(struct policydb *policydb,
++					   struct sidtab *sidtab)
++{
++	struct context *ccontext;
++	const char *ctype;
++
++	ccontext = sidtab_search(sidtab, current_sid());
++	if (!ccontext)
++		return false;
++
++	ctype = sym_name(policydb, SYM_TYPES, ccontext->type - 1);
++
++	return ctype && !strcmp(ctype, "app_zygote");
++}
++
++static void selinux_hidden_avd_deny(struct av_decision *avd)
++{
++	avd->allowed = 0;
++	avd->auditallow = 0;
++	avd->auditdeny = 0xffffffff;
++	avd->flags = 0;
++}
++
++static struct selinux_policy *selinux_hidden_backup_policy(void)
++{
++	if (!&backup_sepolicy)
++		return NULL;
++
++	return READ_ONCE(backup_sepolicy);
++}
++
++static int selinux_hidden_context_to_policy(struct policydb *oldp,
++					    struct policydb *newp,
++					    struct context *oldc,
++					    struct context *newc)
++{
++	struct user_datum *user;
++	struct role_datum *role;
++	struct type_datum *type;
++	const char *name;
++	int rc;
++
++	context_init(newc);
++
++	name = sym_name(oldp, SYM_USERS, oldc->user - 1);
++	user = symtab_search(&newp->p_users, name);
++	if (!user)
++		return -ENOENT;
++	newc->user = user->value;
++
++	name = sym_name(oldp, SYM_ROLES, oldc->role - 1);
++	role = symtab_search(&newp->p_roles, name);
++	if (!role)
++		return -ENOENT;
++	newc->role = role->value;
++
++	name = sym_name(oldp, SYM_TYPES, oldc->type - 1);
++	type = symtab_search(&newp->p_types, name);
++	if (!type || type->attribute)
++		return -ENOENT;
++	newc->type = type->value;
++
++	rc = mls_context_cpy(newc, oldc);
++	if (rc)
++		context_destroy(newc);
++
++	return rc;
++}
++
++static bool selinux_hide_av_query_with_backup(struct policydb *policydb,
++					      struct sidtab *sidtab,
++					      struct context *scontext,
++					      struct context *tcontext,
++					      u16 tclass,
++					      struct av_decision *avd)
++{
++	struct selinux_policy *hidden_policy;
++	struct policydb *hidden_policydb;
++	struct class_datum *hidden_class;
++	struct context hidden_scontext;
++	struct context hidden_tcontext;
++	struct av_decision hidden_avd;
++	const char *tclass_name;
++	int rc;
++
++	hidden_policy = selinux_hidden_backup_policy();
++	if (!hidden_policy)
++		return false;
++
++	if (!selinux_hidden_av_query_caller(policydb, sidtab))
++		return false;
++
++	hidden_policydb = &hidden_policy->policydb;
++	tclass_name = sym_name(policydb, SYM_CLASSES, tclass - 1);
++	if (!tclass_name)
++		return false;
++
++	hidden_class = symtab_search(&hidden_policydb->p_classes,
++				     tclass_name);
++	if (!hidden_class) {
++		selinux_hidden_avd_deny(avd);
++		return true;
++	}
++
++	rc = selinux_hidden_context_to_policy(policydb, hidden_policydb,
++					     scontext, &hidden_scontext);
++	if (rc) {
++		selinux_hidden_avd_deny(avd);
++		return true;
++	}
++
++	rc = selinux_hidden_context_to_policy(policydb, hidden_policydb,
++					     tcontext, &hidden_tcontext);
++	if (rc) {
++		context_destroy(&hidden_scontext);
++		selinux_hidden_avd_deny(avd);
++		return true;
++	}
++
++	avd_init(hidden_policy, &hidden_avd);
++	if (ebitmap_get_bit(&hidden_policydb->permissive_map,
++			    hidden_scontext.type))
++		hidden_avd.flags |= AVD_FLAGS_PERMISSIVE;
++
++	context_struct_compute_av(hidden_policydb, &hidden_scontext,
++				  &hidden_tcontext, hidden_class->value,
++				  &hidden_avd, NULL);
++	*avd = hidden_avd;
++
++	context_destroy(&hidden_tcontext);
++	context_destroy(&hidden_scontext);
++
++	return true;
++}
++
++static u32 selinux_perm_to_av(struct class_datum *tclass_datum,
++			      const char *perm)
++{
++	struct perm_datum *pdatum;
++
++	pdatum = symtab_search(&tclass_datum->permissions, perm);
++	if (!pdatum && tclass_datum->comdatum)
++		pdatum = symtab_search(&tclass_datum->comdatum->permissions,
++				       perm);
++
++	if (!pdatum || !pdatum->value || pdatum->value > 32)
++		return 0;
++
++	return 1U << (pdatum->value - 1);
++}
++
++static void selinux_hide_av_query_rules(struct policydb *policydb,
++					struct sidtab *sidtab,
++					struct context *scontext,
++					struct context *tcontext,
++					u16 tclass,
++					struct av_decision *avd)
++{
++	struct class_datum *tclass_datum;
++	const char *stype;
++	const char *ttype;
++	const char *tclass_name;
++	u32 perm;
++	unsigned int i;
++
++	if (!tclass || tclass > policydb->p_classes.nprim)
++		return;
++
++	if (selinux_hide_av_query_with_backup(policydb, sidtab, scontext,
++					      tcontext, tclass, avd))
++		return;
++
++	if (!avd->allowed)
++		return;
++
++	if (!selinux_hidden_av_query_caller(policydb, sidtab))
++		return;
++
++	tclass_datum = policydb->class_val_to_struct[tclass - 1];
++	tclass_name = sym_name(policydb, SYM_CLASSES, tclass - 1);
++	stype = sym_name(policydb, SYM_TYPES, scontext->type - 1);
++	ttype = sym_name(policydb, SYM_TYPES, tcontext->type - 1);
++	if (!stype || !ttype || !tclass_name)
++		return;
++
++	for (i = 0; i < ARRAY_SIZE(selinux_hidden_av_rules); i++) {
++		const struct selinux_hidden_av_rule *rule;
++
++		rule = &selinux_hidden_av_rules[i];
++		if (strcmp(rule->stype, stype) ||
++		    strcmp(rule->ttype, ttype) ||
++		    strcmp(rule->tclass, tclass_name))
++			continue;
++
++		perm = selinux_perm_to_av(tclass_datum, rule->perm);
++		if (!perm)
++			continue;
++
++		avd->allowed &= ~perm;
++		avd->auditallow &= ~perm;
++		avd->auditdeny |= perm;
++	}
++}
++
+ void services_compute_xperms_decision(struct extended_perms_decision *xpermd,
+ 					struct avtab_node *node)
+ {
+@@ -1201,6 +1421,8 @@ void security_compute_av_user(u32 ssid,
+ 
+ 	context_struct_compute_av(policydb, scontext, tcontext, tclass, avd,
+ 				  NULL);
++	selinux_hide_av_query_rules(policydb, sidtab, scontext, tcontext,
++				    tclass, avd);
+  out:
+ 	rcu_read_unlock();
+ 	return;
