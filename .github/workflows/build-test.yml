@@ -91,7 +91,7 @@ jobs:
       - name: 添加KernelSU版本号
         id: ksu_version
         run: |
-          KSU_VERSION="114514"
+          KSU_VERSION="32483"
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
           #export KSUVER=$KSU_VERSION
