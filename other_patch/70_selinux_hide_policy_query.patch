@@ -2,11 +2,10 @@ diff --git a/security/selinux/ss/services.c b/security/selinux/ss/services.c
 index e5d1431..f26f7ce 100644
 --- a/security/selinux/ss/services.c
 +++ b/security/selinux/ss/services.c
-@@ -945,6 +945,365 @@ static void avd_init(struct selinux_policy *policy, struct av_decision *avd)
+@@ -945,6 +945,374 @@ static void avd_init(struct selinux_policy *policy, struct av_decision *avd)
  	avd->flags = 0;
  }
  
-+#include <linux/cred.h>
 +extern struct selinux_policy *backup_sepolicy __attribute__((weak));
 +
 +struct selinux_hidden_av_rule {
@@ -40,9 +39,19 @@ index e5d1431..f26f7ce 100644
 +	return READ_ONCE(backup_sepolicy);
 +}
 +
-+static bool selinux_hidden_av_query_caller(void)
++static bool selinux_hidden_av_query_caller(struct policydb *policydb,
++					   struct sidtab *sidtab)
 +{
-+	return current_uid().val >= 10000;
++	struct context *ccontext;
++	const char *ctype;
++
++	ccontext = sidtab_search(sidtab, current_sid());
++	if (!ccontext)
++		return false;
++
++	ctype = sym_name(policydb, SYM_TYPES, ccontext->type - 1);
++
++	return ctype && !strcmp(ctype, "app_zygote");
 +}
 +
 +static bool selinux_hidden_context_has_type(const char *scontext,
@@ -168,7 +177,7 @@ index e5d1431..f26f7ce 100644
 +{
 +	unsigned int i;
 +
-+	if (!selinux_hidden_av_query_caller())
++	if (!selinux_hidden_av_query_caller(policydb, sidtab))
 +		return false;
 +
 +	if (selinux_hide_context_query_with_backup(scontext, scontext_len))
@@ -250,7 +259,7 @@ index e5d1431..f26f7ce 100644
 +	if (!hidden_policy)
 +		return false;
 +
-+	if (!selinux_hidden_av_query_caller())
++	if (!selinux_hidden_av_query_caller(policydb, sidtab))
 +		return false;
 +
 +	hidden_policydb = &hidden_policy->policydb;
@@ -336,7 +345,7 @@ index e5d1431..f26f7ce 100644
 +	if (!avd->allowed)
 +		return;
 +
-+	if (!selinux_hidden_av_query_caller())
++	if (!selinux_hidden_av_query_caller(policydb, sidtab))
 +		return;
 +
 +	tclass_datum = policydb->class_val_to_struct[tclass - 1];
@@ -368,7 +377,7 @@ index e5d1431..f26f7ce 100644
  void services_compute_xperms_decision(struct extended_perms_decision *xpermd,
  					struct avtab_node *node)
  {
-@@ -1201,6 +1560,8 @@ void security_compute_av_user(u32 ssid,
+@@ -1201,6 +1569,8 @@ void security_compute_av_user(u32 ssid,
  
  	context_struct_compute_av(policydb, scontext, tcontext, tclass, avd,
  				  NULL);
@@ -377,7 +386,7 @@ index e5d1431..f26f7ce 100644
   out:
  	rcu_read_unlock();
  	return;
-@@ -1544,6 +1905,12 @@ retry:
+@@ -1544,6 +1914,12 @@ retry:
  	policy = rcu_dereference(selinux_state.policy);
  	policydb = &policy->policydb;
  	sidtab = policy->sidtab;
