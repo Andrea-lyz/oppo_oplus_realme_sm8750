@@ -20,6 +20,7 @@ index e5d1431..f26f7ce 100644
 +	{ "untrusted_app", "magisk", "binder", "call" },
 +	{ "untrusted_app", "ksu", "binder", "call" },
 +	{ "untrusted_app", "lsposed_file", "file", "read" },
++	{ "zygote", "adb_data_file", "dir", "search" },
 +};
 +
 +static const char * const selinux_hidden_context_types[] = {
