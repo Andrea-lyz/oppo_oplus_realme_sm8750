@@ -348,6 +348,12 @@ jobs:
             echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
             echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
             sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" kernel/Kbuild
+            # Workaround: upstream bug - ksu_late_loaded declared inside preprocessor guard but used unconditionally
+            if grep -q 'bool ksu_late_loaded;' kernel/core/init.c; then
+              sed -i '/^bool ksu_late_loaded;$/d' kernel/core/init.c
+              sed -i '/^struct cred \*ksu_cred;$/a\bool ksu_late_loaded;' kernel/core/init.c
+              echo "已修复 ksu_late_loaded 声明位置"
+            fi
           else
             echo "已选择无内置KernelSU模式，跳过KernelSU配置..."
           fi
