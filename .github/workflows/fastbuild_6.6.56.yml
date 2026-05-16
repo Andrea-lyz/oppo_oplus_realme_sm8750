@@ -343,14 +343,14 @@ jobs:
           elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
             echo "正在配置原版 KernelSU (tiann/KernelSU)..."
             if [[ "${{ github.event.inputs.susfs_enable }}" == "true" ]]; then
-              echo "Testing SUSFS with upstream KernelSU selinux_hide (3f388ef)..."
-              curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s 3f388ef137c78e1ca0c92c0ada3b8717cdcc4302
+              echo "Testing SUSFS with upstream KernelSU selinux_hide (32491/3a1e6ce)..."
+              curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s 3a1e6ce9abf369082559b83406bdef02301a1bb4
             else
-              echo "SUSFS disabled; pre-adopting upstream KernelSU selinux_hide (3f388ef)..."
-              curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s 3f388ef137c78e1ca0c92c0ada3b8717cdcc4302
+              echo "SUSFS disabled; using upstream KernelSU selinux_hide (32491/3a1e6ce)..."
+              curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s 3a1e6ce9abf369082559b83406bdef02301a1bb4
             fi
             cd ./KernelSU
-            KSU_VERSION=32483
+            KSU_VERSION=32491
             echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
             echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
             sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" kernel/Kbuild
