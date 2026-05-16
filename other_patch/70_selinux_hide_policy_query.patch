@@ -2,7 +2,7 @@ diff --git a/security/selinux/ss/services.c b/security/selinux/ss/services.c
 index e5d1431..f26f7ce 100644
 --- a/security/selinux/ss/services.c
 +++ b/security/selinux/ss/services.c
-@@ -945,6 +945,388 @@ static void avd_init(struct selinux_policy *policy, struct av_decision *avd)
+@@ -945,6 +945,395 @@ static void avd_init(struct selinux_policy *policy, struct av_decision *avd)
  	avd->flags = 0;
  }
  
@@ -27,10 +27,16 @@ index e5d1431..f26f7ce 100644
 +	{ "shell", "su", "process", "transition" },
 +	{ "adbd", "adbroot", "binder", "call" },
 +	{ "untrusted_app", "magisk", "binder", "call" },
++	{ "untrusted_app", "magisk_file", "file", "read" },
++	{ "rootfs", "tmpfs", "filesystem", "associate" },
++	{ "kernel", "tmpfs", "fifo_file", "open" },
 +	{ "untrusted_app", "ksu", "binder", "call" },
 +	{ "untrusted_app", "ksu_file", "file", "read" },
++	{ "kernel", "adb_data_file", "file", "read" },
 +	{ "untrusted_app", "lsposed_file", "file", "read" },
++	{ "system_server", "apk_data_file", "file", "execute" },
 +	{ "untrusted_app", "xposed_data", "file", "read" },
++	{ "dex2oat", "dex2oat_exec", "file", "execute_no_trans" },
 +	{ "zygote", "adb_data_file", "dir", "search" },
 +};
 +
@@ -43,6 +49,7 @@ index e5d1431..f26f7ce 100644
 +	"magisk_file",
 +	"lsposed_file",
 +	"xposed_data",
++	"xposed_file",
 +};
 +
 +static struct selinux_policy *selinux_hidden_backup_policy(void)
@@ -391,7 +398,7 @@ index e5d1431..f26f7ce 100644
  void services_compute_xperms_decision(struct extended_perms_decision *xpermd,
  					struct avtab_node *node)
  {
-@@ -1201,6 +1583,8 @@ void security_compute_av_user(u32 ssid,
+@@ -1201,6 +1590,8 @@ void security_compute_av_user(u32 ssid,
  
  	context_struct_compute_av(policydb, scontext, tcontext, tclass, avd,
  				  NULL);
@@ -400,7 +407,7 @@ index e5d1431..f26f7ce 100644
   out:
  	rcu_read_unlock();
  	return;
-@@ -1544,6 +1928,12 @@ retry:
+@@ -1544,6 +1935,12 @@ retry:
  	policy = rcu_dereference(selinux_state.policy);
  	policydb = &policy->policydb;
  	sidtab = policy->sidtab;
